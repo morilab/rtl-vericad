@@ -95,3 +95,26 @@
 - アーキテクチャ判断、制約、重要な保留事項は `spec/` に記録する。
 - VS Code WebView 最終目標に影響する設計判断は、理由と影響範囲を明示する。
 - 新しいサブシステムを提案する場合は、必要性、責務、配置レイヤ、WebView 互換性を説明する。
+
+## Cursor Cloud specific instructions
+
+### 概要
+React + TypeScript + Vite の単体ブラウザアプリ（2D CAD MVP）。`package-lock.json` を使った npm プロジェクト。
+
+### 主要コマンド
+
+| タスク | コマンド |
+|---|---|
+| 依存インストール | `npm install` |
+| 開発サーバー起動 | `npm run dev` (port 5173) |
+| リント | `npm run lint` |
+| 型チェック | `npm run typecheck` |
+| テスト | `npm run test` |
+| テスト（ウォッチ） | `npm run test:watch` |
+| ビルド | `npm run build` |
+
+### 注意事項
+- `vite.config.ts` の `defineConfig` は `vitest/config` からインポートしている（`test` プロパティを使うため）。`vite` から直接インポートすると型エラーになる。
+- ESLint は flat config (`eslint.config.js`) を使用。ESLint 9 + typescript-eslint 8 の組み合わせ。
+- 既存コードに `rectCorners` 未使用 warning が1件ある（`CadCanvas.tsx`）。既存コードの問題なので放置可。
+- コミットメッセージは日本語で記述すること（`AGENTS.md` 言語運用ルール参照）。
