@@ -6,8 +6,9 @@ import type { Entity, ModuleEntity, WireEntity } from "../cad-core/entities";
 import { createId } from "../cad-core/id";
 import type { ToolId } from "../cad-core/tool";
 import type { Point, Rect } from "../cad-core/types";
-import { defaultGrid, rectCorners } from "../cad-core/grid";
+import { defaultGrid } from "../cad-core/grid";
 import { pointInRect } from "../cad-core/geom";
+import { computeJunctions, isBlockedByConnectedJunction } from "../cad-core/junction";
 
 type ViewState = {
   panPx: { x: number; y: number };
@@ -116,60 +117,6 @@ function drawGrid(ctx: CanvasRenderingContext2D, view: ViewState, size: { w: num
     ctx.lineTo(size.w, sy);
   }
   ctx.stroke();
-}
-
-function getWireSegments(w: WireEntity): Array<{ a: Point; b: Point }> {
-  const segs: Array<{ a: Point; b: Point }> = [];
-  for (let i = 0; i < w.points.length - 1; i++) segs.push({ a: w.points[i]!, b: w.points[i + 1]! });
-  return segs;
-}
-
-function computeJunctions(doc: CadDocument): Map<string, { wireName: string; connected: boolean }> {
-  // 交差点(水平×垂直)で wireName 同一なら結線（●）
-  const wires = doc.entities.filter((e): e is WireEntity => e.kind === "wire");
-  const byWire = wires.map((w) => ({ w, segs: getWireSegments(w) }));
-
-  const result = new Map<string, { wireName: string; connected: boolean }>();
-  for (let i = 0; i < byWire.length; i++) {
-    for (let j = i; j < byWire.length; j++) {
-      const wi = byWire[i]!;
-      const wj = byWire[j]!;
-      for (const si of wi.segs) {
-        const iH = si.a.y === si.b.y;
-        const iV = si.a.x === si.b.x;
-        if (!iH && !iV) continue;
-        for (const sj of wj.segs) {
-          const jH = sj.a.y === sj.b.y;
-          const jV = sj.a.x === sj.b.x;
-          if (!jH && !jV) continue;
-          if (iH && jV) {
-            const y = si.a.y;
-            const x = sj.a.x;
-            const inI = x >= Math.min(si.a.x, si.b.x) && x <= Math.max(si.a.x, si.b.x);
-            const inJ = y >= Math.min(sj.a.y, sj.b.y) && y <= Math.max(sj.a.y, sj.b.y);
-            if (!inI || !inJ) continue;
-            const key = `${x},${y}`;
-            const same = wi.w.wireName === wj.w.wireName;
-            result.set(key, { wireName: wi.w.wireName, connected: same });
-          } else if (iV && jH) {
-            const x = si.a.x;
-            const y = sj.a.y;
-            const inI = y >= Math.min(si.a.y, si.b.y) && y <= Math.max(si.a.y, si.b.y);
-            const inJ = x >= Math.min(sj.a.x, sj.b.x) && x <= Math.max(sj.a.x, sj.b.x);
-            if (!inI || !inJ) continue;
-            const key = `${x},${y}`;
-            const same = wi.w.wireName === wj.w.wireName;
-            result.set(key, { wireName: wi.w.wireName, connected: same });
-          }
-        }
-      }
-    }
-  }
-  // 同一点に複数 wireName が来た場合は connected=false 優先（十字結線は操作的に作れない前提だが保険）
-  for (const [k, v] of result) {
-    if (!v.connected) result.set(k, v);
-  }
-  return result;
 }
 
 function drawModule(ctx: CanvasRenderingContext2D, view: ViewState, m: ModuleEntity, selected: boolean) {
@@ -363,9 +310,7 @@ export function CadCanvas(props: {
   }
 
   function isJunctionPoint(p: Point) {
-    const key = `${p.x},${p.y}`;
-    const j = junctions.get(key);
-    return j?.connected ?? false;
+    return isBlockedByConnectedJunction(junctions, p);
   }
 
   function handlePointerDown(ev: React.PointerEvent) {
